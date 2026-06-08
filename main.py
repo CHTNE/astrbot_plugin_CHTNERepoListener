@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+from datetime import datetime
 from aiohttp import web
 
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, MessageChain
@@ -117,9 +118,24 @@ class ConfigPlugin(Star):
             yield event.plain_result("暂无任何仓库的推送记录。")
             return
 
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines = [f"最近推送 - 截止{now}", ""]
+
         for repo, push in self._latest_pushes.items():
-            message = message + self._format_push_message(push)
-        yield event.plain_result(message)
+            timestamp = push.get("timestamp", "未知")
+            lines.append(f"{repo} - 最近推送时间{timestamp}")
+            commits = push.get("commits", [])
+            for c in commits:
+                sha = c.get("sha", "???????")[:7]
+                msg = c.get("message", "")
+                stats = c.get("stats", {})
+                fc = stats.get("files_changed", 0)
+                ins = stats.get("insertions", 0)
+                dels = stats.get("deletions", 0)
+                lines.append(f"- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）")
+            lines.append("")
+
+        yield event.plain_result("\n".join(lines))
 
     async def terminate(self):
         """关闭 HTTP 服务器。"""
