@@ -1,0 +1,7 @@
+{
+  "groups": {
+    "type": "list",
+    "description": "接收 GitHub commit 推送的群 Session ID 列表",
+    "default": []
+  }
+}
