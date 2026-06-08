@@ -118,8 +118,8 @@ class ConfigPlugin(Star):
             return
 
         for repo, push in self._latest_pushes.items():
-            message = self._format_push_message(push)
-            yield event.plain_result(message)
+            message = message + self._format_push_message(push)
+        yield event.plain_result(message)
 
     async def terminate(self):
         """关闭 HTTP 服务器。"""
