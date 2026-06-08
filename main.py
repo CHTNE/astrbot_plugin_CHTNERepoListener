@@ -1,4 +1,6 @@
 import asyncio
+import json
+import os
 from aiohttp import web
 
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
@@ -13,9 +15,15 @@ class ConfigPlugin(Star):
         self.config = config
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
+        self._latest_commits: dict[str, dict] = {}  # repo_name -> latest commit
+
+        plugin_dir = os.path.dirname(os.path.abspath(__file__))
+        self._data_file = os.path.join(plugin_dir, "latest_commits.json")
 
     async def initialize(self):
         """初始化 HTTP 服务器，监听 localhost:7770，等待 GitHub Actions 的 POST 请求。"""
+        self._load_commits()
+
         app = web.Application()
         app.router.add_post("/", self._handle_webhook)
         self._runner = web.AppRunner(app)
@@ -39,6 +47,8 @@ class ConfigPlugin(Star):
             return web.json_response({"error": "No commits provided"}, status=400)
 
         for commit in commits:
+            self._latest_commits[repository] = commit
+            self._save_commits()
             message = self._format_commit_message(repository, commit)
             groups = self.config.get("groups", [])
             for group_id in groups:
@@ -72,15 +82,33 @@ class ConfigPlugin(Star):
         ]
         return "\n".join(lines)
 
-    # 注册指令的装饰器。指令名为 helloworld。注册成功后，发送 `/helloworld` 就会触发这个指令，并回复 `你好, {user_name}!`
-    @filter.command("helloworld")
-    async def helloworld(self, event: AstrMessageEvent):
-        """这是一个 hello world 指令"""
-        user_name = event.get_sender_name()
-        message_str = event.message_str
-        message_chain = event.get_messages()
-        logger.info(message_chain)
-        yield event.plain_result(f"Hello, {user_name}, 你发了 {message_str}!")
+    def _load_commits(self):
+        """从本地文件加载持久化的 commit 记录。"""
+        try:
+            with open(self._data_file, "r", encoding="utf-8") as f:
+                self._latest_commits = json.load(f)
+            logger.info(f"已加载 {len(self._latest_commits)} 条持久化 commit 记录")
+        except (FileNotFoundError, json.JSONDecodeError):
+            self._latest_commits = {}
+
+    def _save_commits(self):
+        """将 commit 记录持久化到本地文件。"""
+        try:
+            with open(self._data_file, "w", encoding="utf-8") as f:
+                json.dump(self._latest_commits, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存 commit 记录失败: {e}")
+
+    @filter.command("recentcommit")
+    async def recentcommit(self, event: AstrMessageEvent):
+        """查看已监听仓库的最近一条 commit"""
+        if not self._latest_commits:
+            yield event.plain_result("暂无任何仓库的 commit 记录。")
+            return
+
+        for repo, commit in self._latest_commits.items():
+            message = self._format_commit_message(repo, commit)
+            yield event.plain_result(message)
 
     async def terminate(self):
         """关闭 HTTP 服务器。"""
