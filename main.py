@@ -62,11 +62,10 @@ class ConfigPlugin(Star):
         self._save_pushes()
 
         message_text = self._format_push_message(push_info)
-        message_chain = MessageChain().message(message_text)
         groups = self.config.get("groups", [])
         for group_id in groups:
             try:
-                await self.context.send_message(group_id, message_chain)
+                await self.context.send_message(group_id, message_text)
             except Exception as e:
                 logger.error(f"向群 {group_id} 发送消息失败: {e}")
 
