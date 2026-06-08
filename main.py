@@ -107,7 +107,7 @@ class ConfigPlugin(Star):
         """根据 GitHub 用户名获取 At 字符串。"""
         sender_id = self._github_bindings.get(github_username)
         if sender_id:
-            return f" [@{sender_id}]"
+            return sender_id
         return ""
 
     def _load_pushes(self):
@@ -166,7 +166,8 @@ class ConfigPlugin(Star):
             pusher_name = pusher.get("name", "Unknown")
             at_str = self._get_at_str_for_github_user(pusher_name)
             timestamp = push.get("timestamp", "未知")
-            lines.append(f"{repo} - 最近推送时间{timestamp} - 提交人：{pusher_name}{at_str}")
+            lines.append(Comp.Plain(f"{repo} - 最近推送时间{timestamp} - 提交人：{pusher_name}"))
+            lines.append(Comp.At(qq=at_str) if at_str else Comp.Plain(""))
             commits = push.get("commits", [])
             for c in commits:
                 sha = c.get("sha", "???????")[:7]
@@ -175,10 +176,10 @@ class ConfigPlugin(Star):
                 fc = stats.get("files_changed", 0)
                 ins = stats.get("insertions", 0)
                 dels = stats.get("deletions", 0)
-                lines.append(f"- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）")
-            lines.append("")
+                lines.append(Comp.Plain(f"- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
+            lines.append(Comp.Plain(""))
 
-        yield event.plain_result("\n".join(lines))
+        yield event.chain_result(lines)
 
     @filter.command("commitnum")
     async def commitnum(self, event: AstrMessageEvent):
@@ -223,18 +224,19 @@ class ConfigPlugin(Star):
         lines = ["⬆️ commit 排行榜", ""]
         for rank, ((name, email), stats) in enumerate(ranked, 1):
             at_str = self._get_at_str_for_github_user(name)
-            lines.append(f"{rank}️⃣ {name}（{email}）{at_str}")
-            lines.append(f"commit总数：{stats['total_commits']}")
-            lines.append(f"更改行数：{stats['total_insertions']}+ {stats['total_deletions']}-")
+            lines.append(Comp.Plain(f"{rank}️⃣ {name}（{email}"))
+            lines.append(Comp.At(qq=at_str) if at_str else Comp.Plain(""))
+            lines.append(Comp.Plain(f"commit总数：{stats['total_commits']}"))
+            lines.append(Comp.Plain(f"更改行数：{stats['total_insertions']}+ {stats['total_deletions']}-"))
 
             # 按仓库列出
             for repo, r_stats in stats["repos"].items():
                 lines.append(
-                    f"{repo}：{r_stats['commits']} commits，{r_stats['insertions']}+，{r_stats['deletions']}-"
+                    Comp.Plain(f"{repo}：{r_stats['commits']} commits，{r_stats['insertions']}+，{r_stats['deletions']}-")
                 )
-            lines.append("")
+            lines.append(Comp.Plain(""))
 
-        yield event.plain_result("\n".join(lines))
+        yield event.chain_result(lines)
 
     @filter.command("绑定github")
     async def bind_github(self, event: AstrMessageEvent):
