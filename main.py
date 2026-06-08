@@ -3,7 +3,7 @@ import json
 import os
 from aiohttp import web
 
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
+from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, MessageChain
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api import AstrBotConfig
@@ -55,11 +55,12 @@ class ConfigPlugin(Star):
         self._latest_pushes[repository] = push_info
         self._save_pushes()
 
-        message = self._format_push_message(push_info)
+        message_text = self._format_push_message(push_info)
+        message_chain = MessageChain().message(message_text)
         groups = self.config.get("groups", [])
         for group_id in groups:
             try:
-                await self.context.send_message(group_id, message)
+                await self.context.send_message(group_id, message_chain)
             except Exception as e:
                 logger.error(f"向群 {group_id} 发送消息失败: {e}")
 
