@@ -3,6 +3,9 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Plugin data files
+github_bindings.json
+
 # C extensions
 *.so
 
@@ -205,3 +208,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+latest_pushes.json
