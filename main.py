@@ -86,12 +86,11 @@ class ConfigPlugin(Star):
         pusher_display = f"{pusher_name}（{pusher_email}"
 
         lines = [
-            Comp.Plain(f"监听到来自仓库 {repository} 的新代码推送：\n"),
-            Comp.Plain(""),
-            Comp.Plain(f"提交人：{pusher_display}"),
+            Comp.Plain(f"监听到来自仓库 {repository} 的新代码推送：\n\u200b"),
+            Comp.Plain(f"提交人：{pusher_display} \u200b"),
             Comp.At(qq=at_str) if at_str else Comp.Plain(""),
-            Comp.Plain(f"\n提交时间：{timestamp}"),
-            Comp.Plain(f"\n提交信息："),
+            Comp.Plain(f"\u200b\n提交时间：{timestamp}"),
+            Comp.Plain(f"\u200b\n提交信息："),
         ]
         for c in commits:
             sha = c.get("sha", "???????")[:7]
@@ -100,7 +99,7 @@ class ConfigPlugin(Star):
             fc = stats.get("files_changed", 0)
             ins = stats.get("insertions", 0)
             dels = stats.get("deletions", 0)
-            lines.append(Comp.Plain(f"\n- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
+            lines.append(Comp.Plain(f"\u200b\n- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
         return lines
 
     def _get_at_str_for_github_user(self, github_username: str) -> str:
@@ -152,7 +151,7 @@ class ConfigPlugin(Star):
             return
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        lines = [Comp.Plain(f"最近推送 - 截止{now}\n")]
+        lines = [Comp.Plain(f"最近推送 - 截止{now}\n\u200b")]
 
         # 每个仓库取最新一条 push
         latest_per_repo: dict[str, dict] = {}
@@ -166,7 +165,7 @@ class ConfigPlugin(Star):
             pusher_name = pusher.get("name", "Unknown")
             at_str = self._get_at_str_for_github_user(pusher_name)
             timestamp = push.get("timestamp", "未知")
-            lines.append(Comp.Plain(f"{repo} - 最近推送时间{timestamp} - 提交人：{pusher_name} "))
+            lines.append(Comp.Plain(f"{repo} - 最近推送时间{timestamp} - 提交人：{pusher_name} \u200b"))
             lines.append(Comp.At(qq=at_str) if at_str else Comp.Plain(""))
             commits = push.get("commits", [])
             for c in commits:
@@ -176,8 +175,8 @@ class ConfigPlugin(Star):
                 fc = stats.get("files_changed", 0)
                 ins = stats.get("insertions", 0)
                 dels = stats.get("deletions", 0)
-                lines.append(Comp.Plain(f"\n- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
-            lines.append(Comp.Plain("\n"))
+                lines.append(Comp.Plain(f"\u200b\n- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
+            lines.append(Comp.Plain("\u200b\n\u200b"))
 
         yield event.chain_result(lines)
 
@@ -221,20 +220,20 @@ class ConfigPlugin(Star):
         # 按总 commit 数降序排序
         ranked = sorted(user_stats.items(), key=lambda x: x[1]["total_commits"], reverse=True)
 
-        lines = [Comp.Plain("⬆️ commit 排行榜"), Comp.Plain("\n")]
+        lines = [Comp.Plain("⬆️ commit 排行榜"), Comp.Plain("\u200b\n\u200b")]
         for rank, ((name, email), stats) in enumerate(ranked, 1):
             at_str = self._get_at_str_for_github_user(name)
-            lines.append(Comp.Plain(f"\n{rank}️⃣ {name}（{email}"))
+            lines.append(Comp.Plain(f"\u200b\n{rank}️⃣ {name}（{email} \u200b"))
             lines.append(Comp.At(qq=at_str) if at_str else Comp.Plain(""))
-            lines.append(Comp.Plain(f"\ncommit总数：{stats['total_commits']}"))
-            lines.append(Comp.Plain(f"\n更改行数：{stats['total_insertions']}+ {stats['total_deletions']}-"))
+            lines.append(Comp.Plain(f"\u200b\ncommit总数：{stats['total_commits']}"))
+            lines.append(Comp.Plain(f"\u200b\n更改行数：{stats['total_insertions']}+ {stats['total_deletions']}-"))
 
             # 按仓库列出
             for repo, r_stats in stats["repos"].items():
                 lines.append(
-                    Comp.Plain(f"\n{repo}：{r_stats['commits']} commits，{r_stats['insertions']}+，{r_stats['deletions']}-")
+                    Comp.Plain(f"\u200b\n{repo}：{r_stats['commits']} commits，{r_stats['insertions']}+，{r_stats['deletions']}-")
                 )
-            lines.append(Comp.Plain("\n"))
+            lines.append(Comp.Plain("\u200b\n\u200b"))
 
         yield event.chain_result(lines)
 
