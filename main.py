@@ -15,14 +15,14 @@ class ConfigPlugin(Star):
         self.config = config
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
-        self._latest_commits: dict[str, dict] = {}  # repo_name -> latest commit
+        self._latest_pushes: dict[str, dict] = {}  # repo_name -> latest push
 
         plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self._data_file = os.path.join(plugin_dir, "latest_commits.json")
+        self._data_file = os.path.join(plugin_dir, "latest_pushes.json")
 
     async def initialize(self):
         """初始化 HTTP 服务器，监听 localhost:7770，等待 GitHub Actions 的 POST 请求。"""
-        self._load_commits()
+        self._load_pushes()
 
         app = web.Application()
         app.router.add_post("/", self._handle_webhook)
@@ -33,7 +33,7 @@ class ConfigPlugin(Star):
         logger.info("GitHub Webhook 监听器已启动: http://localhost:7770")
 
     async def _handle_webhook(self, request: web.Request) -> web.Response:
-        """处理来自 GitHub Actions 的 POST 请求。"""
+        """处理来自 GitHub Actions 的 POST 请求（一次 push）。"""
         try:
             data = await request.json()
         except Exception as e:
@@ -46,68 +46,78 @@ class ConfigPlugin(Star):
         if not commits:
             return web.json_response({"error": "No commits provided"}, status=400)
 
-        for commit in commits:
-            self._latest_commits[repository] = commit
-            self._save_commits()
-            message = self._format_commit_message(repository, commit)
-            groups = self.config.get("groups", [])
-            for group_id in groups:
-                try:
-                    await self.context.send_message(group_id, message)
-                except Exception as e:
-                    logger.error(f"向群 {group_id} 发送消息失败: {e}")
+        push_info = {
+            "repository": repository,
+            "pusher": data.get("pusher", {}),
+            "timestamp": data.get("timestamp", ""),
+            "commits": commits,
+        }
+        self._latest_pushes[repository] = push_info
+        self._save_pushes()
 
-        logger.info(f"已处理来自 {repository} 的 webhook，共 {len(commits)} 条 commit")
+        message = self._format_push_message(push_info)
+        groups = self.config.get("groups", [])
+        for group_id in groups:
+            try:
+                await self.context.send_message(group_id, message)
+            except Exception as e:
+                logger.error(f"向群 {group_id} 发送消息失败: {e}")
+
+        logger.info(f"已处理来自 {repository} 的 push，共 {len(commits)} 条 commit")
         return web.json_response({"status": "ok", "processed": len(commits)})
 
-    def _format_commit_message(self, repository: str, commit: dict) -> str:
-        """将单个 commit 格式化为推送消息。"""
-        author = commit.get("author", {})
-        author_name = author.get("name", "Unknown")
-        author_email = author.get("email", "")
-        timestamp = commit.get("timestamp", "")
-        commit_msg = commit.get("message", "")
-        stats = commit.get("stats", {})
-        files_changed = stats.get("files_changed", 0)
-        insertions = stats.get("insertions", 0)
-        deletions = stats.get("deletions", 0)
+    def _format_push_message(self, push: dict) -> str:
+        """将一次 push 格式化为推送消息。"""
+        repository = push.get("repository", "unknown")
+        pusher = push.get("pusher", {})
+        pusher_name = pusher.get("name", "Unknown")
+        pusher_email = pusher.get("email", "")
+        timestamp = push.get("timestamp", "")
+        commits = push.get("commits", [])
 
         lines = [
-            f"监听到来自仓库 {repository} 的新commit：",
+            f"监听到来自仓库 {repository} 的新代码推送：",
             "",
-            f"提交人：{author_name}（{author_email}）",
+            f"提交人：{pusher_name}（{pusher_email}）",
             f"提交时间：{timestamp}",
-            f"提交信息：{commit_msg}",
-            f"{files_changed} files changed, {insertions} insertions(+), {deletions} deletions(-)",
+            "提交信息：",
         ]
+        for c in commits:
+            sha = c.get("sha", "???????")[:7]
+            msg = c.get("message", "")
+            stats = c.get("stats", {})
+            fc = stats.get("files_changed", 0)
+            ins = stats.get("insertions", 0)
+            dels = stats.get("deletions", 0)
+            lines.append(f"- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）")
         return "\n".join(lines)
 
-    def _load_commits(self):
-        """从本地文件加载持久化的 commit 记录。"""
+    def _load_pushes(self):
+        """从本地文件加载持久化的 push 记录。"""
         try:
             with open(self._data_file, "r", encoding="utf-8") as f:
-                self._latest_commits = json.load(f)
-            logger.info(f"已加载 {len(self._latest_commits)} 条持久化 commit 记录")
+                self._latest_pushes = json.load(f)
+            logger.info(f"已加载 {len(self._latest_pushes)} 条持久化 push 记录")
         except (FileNotFoundError, json.JSONDecodeError):
-            self._latest_commits = {}
+            self._latest_pushes = {}
 
-    def _save_commits(self):
-        """将 commit 记录持久化到本地文件。"""
+    def _save_pushes(self):
+        """将 push 记录持久化到本地文件。"""
         try:
             with open(self._data_file, "w", encoding="utf-8") as f:
-                json.dump(self._latest_commits, f, ensure_ascii=False, indent=2)
+                json.dump(self._latest_pushes, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"保存 commit 记录失败: {e}")
+            logger.error(f"保存 push 记录失败: {e}")
 
-    @filter.command("recentcommit")
-    async def recentcommit(self, event: AstrMessageEvent):
-        """查看已监听仓库的最近一条 commit"""
-        if not self._latest_commits:
-            yield event.plain_result("暂无任何仓库的 commit 记录。")
+    @filter.command("recentpush")
+    async def recentpush(self, event: AstrMessageEvent):
+        """查看已监听仓库的最近一次 push"""
+        if not self._latest_pushes:
+            yield event.plain_result("暂无任何仓库的推送记录。")
             return
 
-        for repo, commit in self._latest_commits.items():
-            message = self._format_commit_message(repo, commit)
+        for repo, push in self._latest_pushes.items():
+            message = self._format_push_message(push)
             yield event.plain_result(message)
 
     async def terminate(self):
