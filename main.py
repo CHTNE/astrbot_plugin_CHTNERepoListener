@@ -84,14 +84,15 @@ class ConfigPlugin(Star):
 
         # 查找是否有绑定的用户用于 At
         at_str = self._get_at_str_for_github_user(pusher_name)
-        pusher_display = f"{pusher_name}（{pusher_email}）{at_str}"
+        pusher_display = f"{pusher_name}（{pusher_email}"
 
         lines = [
-            f"监听到来自仓库 {repository} 的新代码推送：",
-            "",
-            f"提交人：{pusher_display}",
-            f"提交时间：{timestamp}",
-            "提交信息：",
+            Comp.Plain(f"监听到来自仓库 {repository} 的新代码推送："),
+            Comp.Plain(""),
+            Comp.Plain(f"提交人：{pusher_display}"),
+            Comp.At(qq=at_str) if at_str else Comp.Plain(""),
+            Comp.Plain(f"提交时间：{timestamp}"),
+            Comp.Plain("提交信息："),
         ]
         for c in commits:
             sha = c.get("sha", "???????")[:7]
@@ -100,8 +101,8 @@ class ConfigPlugin(Star):
             fc = stats.get("files_changed", 0)
             ins = stats.get("insertions", 0)
             dels = stats.get("deletions", 0)
-            lines.append(f"- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）")
-        return "\n".join(lines)
+            lines.append(Comp.Plain(f"- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
+        return lines
 
     def _get_at_str_for_github_user(self, github_username: str) -> str:
         """根据 GitHub 用户名获取 At 字符串。"""
@@ -152,7 +153,7 @@ class ConfigPlugin(Star):
             return
 
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        lines = [f"最近推送 - 截止{now}", ""]
+        lines = [Comp.Plain(f"最近推送 - 截止{now}")]
 
         # 每个仓库取最新一条 push
         latest_per_repo: dict[str, dict] = {}
@@ -221,7 +222,7 @@ class ConfigPlugin(Star):
         # 按总 commit 数降序排序
         ranked = sorted(user_stats.items(), key=lambda x: x[1]["total_commits"], reverse=True)
 
-        lines = ["⬆️ commit 排行榜", ""]
+        lines = [Comp.Plain("⬆️ commit 排行榜"), Comp.Plain("")]
         for rank, ((name, email), stats) in enumerate(ranked, 1):
             at_str = self._get_at_str_for_github_user(name)
             lines.append(Comp.Plain(f"{rank}️⃣ {name}（{email}"))
