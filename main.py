@@ -1,7 +1,9 @@
 import asyncio
 import json
 import os
+import shutil
 import astrbot.api.message_components as Comp
+from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 from aiohttp import web
@@ -10,8 +12,9 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, Mess
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
 from astrbot.api import AstrBotConfig
+from astrbot.core.utils.astrbot_path import get_astrbot_data_path
 
-@register("astrbot_plugin_CHTNERepoListener", "CHTNE Chem Club", "CHTNE仓库监听器", "1.0.0")
+@register("astrbot_plugin_CHTNERepoListener", "CHTNE Chem Club", "CHTNE仓库监听器", "1.2.0")
 class ConfigPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -21,12 +24,20 @@ class ConfigPlugin(Star):
         self._pushes: list[dict] = []  # 所有 push 记录（按时间排序）
         self._github_bindings: dict[str, str] = {}  # github_username -> sender_id
 
+        # 使用规范化的插件数据目录
+        plugin_data_dir = Path(get_astrbot_data_path()) / "plugin_data" / self.name
+        plugin_data_dir.mkdir(parents=True, exist_ok=True)
+        self._data_file = str(plugin_data_dir / "latest_pushes.json")
+        self._bindings_file = str(plugin_data_dir / "github_bindings.json")
+
+        # 旧数据文件路径（插件目录下，用于迁移）
         plugin_dir = os.path.dirname(os.path.abspath(__file__))
-        self._data_file = os.path.join(plugin_dir, "latest_pushes.json")
-        self._bindings_file = os.path.join(plugin_dir, "github_bindings.json")
+        self._old_data_file = os.path.join(plugin_dir, "latest_pushes.json")
+        self._old_bindings_file = os.path.join(plugin_dir, "github_bindings.json")
 
     async def initialize(self):
         """初始化 HTTP 服务器，监听 localhost:7770，等待 GitHub Actions 的 POST 请求。"""
+        self._migrate_old_data()
         self._load_pushes()
         self._load_bindings()
 
@@ -108,6 +119,24 @@ class ConfigPlugin(Star):
         if sender_id:
             return sender_id
         return ""
+
+    def _migrate_old_data(self):
+        """将旧插件目录下的数据文件迁移到新的规范化数据目录。"""
+        # 迁移 pushes 数据
+        if os.path.exists(self._old_data_file) and not os.path.exists(self._data_file):
+            try:
+                shutil.copy2(self._old_data_file, self._data_file)
+                logger.info(f"已将 push 记录从 {self._old_data_file} 迁移到 {self._data_file}")
+            except Exception as e:
+                logger.error(f"迁移 push 记录失败: {e}")
+
+        # 迁移 bindings 数据
+        if os.path.exists(self._old_bindings_file) and not os.path.exists(self._bindings_file):
+            try:
+                shutil.copy2(self._old_bindings_file, self._bindings_file)
+                logger.info(f"已将 GitHub 绑定从 {self._old_bindings_file} 迁移到 {self._bindings_file}")
+            except Exception as e:
+                logger.error(f"迁移 GitHub 绑定失败: {e}")
 
     def _load_pushes(self):
         """从本地文件加载持久化的 push 记录。"""
