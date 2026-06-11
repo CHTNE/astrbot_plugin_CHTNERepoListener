@@ -204,7 +204,7 @@ class ConfigPlugin(Star):
                 fc = stats.get("files_changed", 0)
                 ins = stats.get("insertions", 0)
                 dels = stats.get("deletions", 0)
-                lines.append(Comp.Plain(f"\u200b\n- {sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
+                lines.append(Comp.Plain(f"\u200b\n- [{repo}]\n{sha}：{msg}（{fc} files changed, {ins} insertions(+), {dels} deletions(-)）"))
             lines.append(Comp.Plain("\u200b\n\u200b"))
 
         yield event.chain_result(lines)
