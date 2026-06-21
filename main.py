@@ -65,6 +65,7 @@ class ConfigPlugin(Star):
 
         push_info = {
             "repository": repository,
+            "branch": data.get("branch", ""),
             "pusher": data.get("pusher", {}),
             "timestamp": data.get("timestamp", ""),
             "commits": commits,
@@ -86,6 +87,7 @@ class ConfigPlugin(Star):
     def _format_push_message(self, push: dict) -> str:
         """将一次 push 格式化为推送消息。"""
         repository = push.get("repository", "unknown")
+        branch = push.get("branch", "")
         pusher = push.get("pusher", {})
         pusher_name = pusher.get("name", "Unknown")
         pusher_email = pusher.get("email", "")
@@ -96,11 +98,14 @@ class ConfigPlugin(Star):
         at_str = self._get_at_str_for_github_user(pusher_name)
         pusher_display = f"{pusher_name}（{pusher_email}"
 
+        branch_line = f"\u200b\n提交分支：{branch}" if branch else ""
+
         lines = [
             Comp.Plain(f"监听到来自仓库 {repository} 的新代码推送：\n\u200b"),
             Comp.Plain(f"提交人：{pusher_display} \u200b"),
             Comp.At(qq=at_str) if at_str else Comp.Plain(""),
             Comp.Plain(f"\u200b\n提交时间：{timestamp}"),
+            Comp.Plain(branch_line),
             Comp.Plain(f"\u200b\n提交信息："),
         ]
         for c in commits:
